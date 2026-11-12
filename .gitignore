@@ -1,0 +1,17 @@
+/bin/
+/output/
+/.playwright-cli/
+/.playwright/
+/.env
+/.env.*
+!/.env.example
+*.exe
+*.exe~
+*.test
+*.out
+*.log
+*.pem
+*.key
+credentials*.json
+.DS_Store
+Thumbs.db

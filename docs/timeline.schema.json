@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical timeline.v1 project",
+  "description": "Structure only. Go additionally validates unique IDs, references, UTF-8 byte lengths, int64 overflow, source bounds and overlap.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "project_id",
+    "revision",
+    "tracks",
+    "clips"
+  ],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "revision": {
+      "type": "integer",
+      "format": "int64",
+      "minimum": 1
+    },
+    "tracks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "locked"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "enum": [
+              "video",
+              "caption"
+            ]
+          },
+          "locked": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "clips": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "$ref": "#/$defs/Clip"
+      }
+    }
+  },
+  "$defs": {
+    "Clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional display label; stable id remains the editing identity. Length counts Unicode code points."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "track_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "start_ms": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        },
+        "source_in_ms": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        },
+        "source_duration_ms": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 20000
+        }
+      },
+      "required": [
+        "id",
+        "track_id",
+        "start_ms",
+        "duration_ms"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "source_in_ms",
+            "source_duration_ms"
+          ],
+          "not": {
+            "required": [
+              "text"
+            ]
+          }
+        },
+        {
+          "required": [
+            "text"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "source_in_ms"
+                ]
+              },
+              {
+                "required": [
+                  "source_duration_ms"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

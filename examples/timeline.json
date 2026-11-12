@@ -1,0 +1,19 @@
+{
+  "project_id": "rough-cut-demo",
+  "revision": 1,
+  "tracks": [
+    {"id": "video-1", "kind": "video", "locked": false},
+    {"id": "video-2", "kind": "video", "locked": false},
+    {"id": "caption-1", "kind": "caption", "locked": false},
+    {"id": "caption-locked", "kind": "caption", "locked": true}
+  ],
+  "clips": [
+    {"id": "clip-a", "display_name": "开场镜头", "track_id": "video-1", "start_ms": 0, "duration_ms": 5000, "source_in_ms": 0, "source_duration_ms": 15000},
+    {"id": "clip-b", "display_name": "产品介绍", "track_id": "video-1", "start_ms": 6000, "duration_ms": 4000, "source_in_ms": 1000, "source_duration_ms": 12000},
+    {"id": "clip-c", "display_name": "细节特写", "track_id": "video-2", "start_ms": 0, "duration_ms": 4000, "source_in_ms": 0, "source_duration_ms": 12000},
+    {"id": "clip-d", "display_name": "结尾镜头", "track_id": "video-2", "start_ms": 6000, "duration_ms": 3000, "source_in_ms": 2000, "source_duration_ms": 10000},
+    {"id": "caption-a", "display_name": "片头字幕", "track_id": "caption-1", "start_ms": 0, "duration_ms": 3000, "text": "欢迎观看"},
+    {"id": "caption-b", "display_name": "片尾字幕", "track_id": "caption-1", "start_ms": 8000, "duration_ms": 2000, "text": "谢谢观看"},
+    {"id": "caption-lock", "display_name": "锁定字幕", "track_id": "caption-locked", "start_ms": 4000, "duration_ms": 2000, "text": "锁定字幕，请勿修改"}
+  ]
+}

@@ -1,0 +1,43 @@
+name: Build release binaries
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - {os: windows, arch: amd64, ext: .exe}
+          - {os: windows, arch: arm64, ext: .exe}
+          - {os: linux, arch: amd64, ext: ''}
+          - {os: linux, arch: arm64, ext: ''}
+          - {os: darwin, arch: amd64, ext: ''}
+          - {os: darwin, arch: arm64, ext: ''}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - run: go test ./...
+      - name: Build standalone binary
+        env:
+          GOOS: ${{ matrix.target.os }}
+          GOARCH: ${{ matrix.target.arch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p package
+          go build -trimpath -ldflags="-s -w" -o package/safety-edit-agent-${{ matrix.target.os }}-${{ matrix.target.arch }}${{ matrix.target.ext }} .
+          cp README.md THIRD_PARTY.md package/
+          cp -r examples docs package/
+          cd package
+          sha256sum safety-edit-agent-* > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safety-edit-agent-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: package/
+          if-no-files-found: error
