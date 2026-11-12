@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,7 +42,7 @@ func application(config agent.Config) http.Handler {
 			http.Error(w, "method not allowed", 405)
 			return
 		}
-		if r.URL.Path != "/" && r.URL.Path != "/app.js" && r.URL.Path != "/style.css" && r.URL.Path != "/demo-cover.svg" {
+		if r.URL.Path != "/" && !(strings.Count(r.URL.Path, "/") == 1 && strings.HasSuffix(r.URL.Path, ".js")) && r.URL.Path != "/style.css" && r.URL.Path != "/demo-cover.svg" {
 			http.NotFound(w, r)
 			return
 		}
@@ -65,7 +66,8 @@ func main() {
 		listen = "127.0.0.1:8090"
 	}
 	timeout := envInt("MODEL_TIMEOUT_SECONDS", 45)
-	config := agent.Config{MaxSessions: envInt("MAX_SESSIONS", 128), ModelConcurrency: envInt("MODEL_CONCURRENCY", 4), ModelTimeout: time.Duration(timeout) * time.Second}
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	config := agent.Config{Logger: logger, MaxSessions: envInt("MAX_SESSIONS", 128), ModelConcurrency: envInt("MODEL_CONCURRENCY", 4), ModelTimeout: time.Duration(timeout) * time.Second}
 	productAuth, authErr := loadProductAuth(os.Getenv("PRODUCT_AUTH_FILE"))
 	if authErr != nil {
 		log.Fatal(authErr)

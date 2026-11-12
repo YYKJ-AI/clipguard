@@ -50,7 +50,9 @@ type productError struct {
 func (s *Server) productHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Request-ID", randomID())
+	if w.Header().Get("X-Request-ID") == "" {
+		w.Header().Set("X-Request-ID", randomID())
+	}
 	if s.config.ProductAuth == nil {
 		productFail(w, 503, "INTEGRATION_DISABLED", errors.New("产品接口尚未配置身份校验"), false)
 		return
@@ -251,7 +253,7 @@ func (s *Server) productWrite(w http.ResponseWriter, r *http.Request, owner, id 
 			productFail(w, 503, "PROJECT_CAPACITY_EXCEEDED", errors.New("工程容量已满，已有工程不会被清理"), false)
 			return
 		}
-		u = &userSession{workspace: NewWorkspace()}
+		u = &userSession{workspace: newWorkspace(s.config.Now)}
 		s.productProjects[key] = u
 	}
 	s.mu.Unlock()
@@ -296,6 +298,9 @@ func (c *productCapture) Write(p []byte) (int, error) {
 	return c.Buffer.Write(p)
 }
 func (s *Server) flushProduct(w http.ResponseWriter, c *productCapture) {
+	if c.status == 0 {
+		c.status = http.StatusOK
+	}
 	if c.status >= 400 {
 		var legacy struct {
 			Error string `json:"error"`
@@ -326,5 +331,6 @@ func (s *Server) flushProduct(w http.ResponseWriter, c *productCapture) {
 	_, _ = w.Write(c.Bytes())
 }
 func productFail(w http.ResponseWriter, status int, code string, err error, retryable bool) {
+	w.Header().Set("X-Error-Code", code)
 	respond(w, status, map[string]any{"error": productError{code, err.Error(), w.Header().Get("X-Request-ID"), retryable}})
 }

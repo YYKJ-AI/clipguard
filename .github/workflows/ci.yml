@@ -18,13 +18,24 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache: false
+      - name: Check Go formatting before installing development dependencies
+        shell: bash
+        run: test -z "$(gofmt -l .)"
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - run: go test -count=1 ./...
-      - run: go vet ./...
-      - run: go build ./...
-      - run: node --test tests/web.test.cjs
-      - run: node --check web/app.js
+          node-version: '24'
+      - run: go test -count=1 . ./internal/...
+      - run: go vet . ./internal/...
+      - run: go build . ./internal/...
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run format:check
       - if: matrix.os == 'ubuntu-latest' && matrix.go == 'stable'
-        run: go test -race ./...
+        name: Core coverage, races and parser fuzzing
+        shell: bash
+        run: |
+          go test -coverprofile=coverage.out ./internal/agent
+          go tool cover -func=coverage.out | awk '/^total:/ { gsub(/%/, "", $3); if ($3 + 0 < 85) exit 1 }'
+          go test -race -count=1 . ./internal/...
+          go test -run '^$' -fuzz '^FuzzOfflineParser$' -fuzztime=30s ./internal/agent

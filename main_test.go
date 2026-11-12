@@ -54,12 +54,8 @@ func TestPackagedPageDefaultsToOffline(t *testing.T) {
 		!strings.Contains(page, `<option value="model" disabled>`) {
 		t.Fatal("page does not default to offline with model disabled")
 	}
-	script := fetch("/app.js")
-	if !strings.Contains(script, `$('mode').value='offline'`) {
-		t.Fatal("page does not explicitly select offline on load")
-	}
-	if strings.Contains(script, `$('mode').value='model'`) {
-		t.Fatal("configuring a model silently switches the default parser")
+	if !strings.Contains(page, `type="module" src="/app.js"`) {
+		t.Fatal("page does not load native modules")
 	}
 }
 

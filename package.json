@@ -1,0 +1,17 @@
+{
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "globals": "17.14.0",
+    "prettier": "3.10.1"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules --test tests/web.test.cjs",
+    "lint": "eslint web tests",
+    "format": "prettier --write \"web/**/*.{js,css}\" \"tests/**/*.{js,cjs}\"",
+    "format:check": "prettier --check \"web/**/*.{js,css}\" \"tests/**/*.{js,cjs}\""
+  },
+  "name": "safety-edit-agent"
+}

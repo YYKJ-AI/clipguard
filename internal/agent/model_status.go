@@ -62,7 +62,7 @@ func (s *Server) checkModel(w http.ResponseWriter, r *http.Request) {
 			err = errors.New("连接检查未收到咨询回复，请检查模型配置")
 		}
 		if err != nil {
-			status.Message = publicError(err.Error()) + "。检查没有修改任何工程，可继续使用离线功能。"
+			status.Message = publicError(err) + "。检查没有修改任何工程，可继续使用离线功能。"
 			break
 		}
 		if stream {

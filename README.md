@@ -62,7 +62,7 @@ GitHub 的发布包工作流可生成 Windows、macOS、Linux 的 amd64/arm64 �
 7. 选择时间轴中的视频片段，点击“使用演示封面”或绑定本地视频/图片，拖动时间位置查看。未绑定媒体时仍能完成全部 JSON 编辑验收。
 8. 导出当前工程 JSON，再导入下载文件核对结果。
 
-完整八场景及扩展验收见 [离线验收指南](docs/离线验收指南.md)。验收状态见 [本轮扩展交付记录](docs/扩展能力与可移植交付.md)。
+实现与验证结果见 [测试与验收记录](docs/verification/2026-11-12-test-report.md)，架构约定见 [架构决策](docs/adr/0001-maintainable-core.md)。
 
 ## 离线句式与目标引用
 
@@ -102,11 +102,12 @@ GitHub 的发布包工作流可生成 Windows、macOS、Linux 的 amd64/arm64 �
 ## 保存、媒体与运行边界
 
 - 不覆盖导入文件。导出仅包含已提交工程，不包含待确认计划、媒体文件、编辑记录或撤销栈；发起下载不等于文件已经保存成功。
-- 工程、历史、会话和模型连接检查状态在服务进程内存中。同地址同浏览器会话刷新可读回工程和编辑记录；聊天及待确认卡片不恢复。程序重启或重新导入会清空历史。
+- 工程、历史、会话和模型连接检查状态在服务进程内存中。同地址同浏览器有效会话刷新可读回工程和编辑记录；聊天及待确认卡片不恢复。匿名会话默认空闲 30 分钟过期，请求到来时清理；达到默认 128 个会话时回收最久未访问项。会话回收、程序重启或重新导入会丢失未导出工程与历史。
 - 撤销深度最多 100 条，待确认计划最多 64 个，撤销及重做请求标识各最多 1024 个，实际编辑记录最多 1000 条。达到上限明确拒绝，不静默删除记录。可导出后重新导入开始新历史。
-- 最多 128 条轨道、4096 个片段、单请求 1 MiB、单指令 64 项操作。服务端文字最多 4000 字节，页面最多 2000 字符。
+- 最多 128 条轨道、4096 个片段、单请求 1 MiB、单指令 64 项操作。前后端统一最多 2000 个 Unicode 字符（含中文与 emoji），服务端通过会话接口返回上限。
 - 媒体仅通过浏览器临时对象 URL 绑定，限 512 MiB 的本地视频或 PNG/JPEG/WebP/GIF，不上传到服务端。刷新或重新导入需重新绑定；不能随工程 JSON 带走本地文件。被复制插入的片段在本页面可继承来源绑定。
 - 简单预览展示当前所选视频片段，不做多视频轨合成或音频混音；字幕按独立时间范围显示。实际文件长度不足或编码不受浏览器支持会明确提示，JSON 编辑仍可用。
+- 同一连接来源每分钟最多新建 20 次匿名会话，已连接会话不消耗此额度；反向代理转发头不作为可信来源。
 - 默认只监听 127.0.0.1。不同浏览器会话相互隔离，不承诺多人服务容量或生产部署。
 
 ## 在线模型：验收方自行配置，可选
@@ -141,25 +142,49 @@ sh scripts/start.sh --online
 
 SSE 要求正常 `finish_reason=stop` 和 `[DONE]`；断流、超时、停止、截断及非法 JSON 均不提交。不支持流式的服务明确失败，不模拟打字或悄悄切换供应商。格式错误最多修复重试一次；认证、限流和网络失败不自动重试。可手动切回离线，不修改工程。
 
-## 自动化与 GitHub 交付
+不同供应商的连接和理解效果需要分别验收；本次未使用在线密钥重新验证供应商能力。
+
+## 开发与检查
+
+运行程序只需要 Go 1.22+。开发页面需 Node.js 22.13+ 或 24+；npm 依赖仅用于格式和静态检查，不参与程序运行。
 
 ```text
-go test -count=1 ./...
-go build ./...
-go vet ./...
+go test -count=1 . ./internal/...
+go vet . ./internal/...
+go build . ./internal/...
+npm ci
+npm test
+npm run lint
+npm run format:check
 ```
 
-可选 Node.js 18+ 页面测试，无 npm 安装：
+Go 格式检查：`gofmt -l *.go internal` 应无输出；整理用 `gofmt -w *.go internal`。页面整理用 `npm run format`。Go 命令限定源码目录，避免将开发依赖中附带的 Go 示例作为本项目编译。
 
 ```text
-node --test tests/web.test.cjs
-node --check web/app.js
+go test -run '^$' -bench . -benchmem ./internal/agent
+go test -run '^$' -fuzz '^FuzzOfflineParser$' -fuzztime=300s ./internal/agent
+go test -race -count=1 . ./internal/...
 ```
 
-[CI](.github/workflows/ci.yml) 在 Windows/macOS/Linux 上检查 Go 1.22 与稳定版，并在 Linux 运行竞态检测。[发布包构建](.github/workflows/release.yml) 可手动触发或在 v 开头标签推送时生成独立程序。工作流尚未在目标 GitHub 仓库运行时，不应将其说成云端已通过。
+竞态检查需要支持 cgo 的 C 编译工具，也在 Linux CI 执行。核心包覆盖率门槛为 85%，不把入口启动逻辑的覆盖率混入核心门槛。实测结果见验证记录。
 
-提交源码、测试、文档、脚本、样例与工作流；不要提交 `.env`、密钥、浏览器会话、验收临时下载、编译缓存或旧 exe。`.gitignore` 已配置常见本地文件。来源与复用见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+[CI](.github/workflows/ci.yml) 检查 Go 格式、测试、vet、构建以及页面测试、ESLint 和 Prettier；Linux 稳定版增加覆盖率、竞态和短时 fuzz。[发布工作流](.github/workflows/release.yml) 生成独立二进制，不自动公开发布。云端状态以实际 Actions 为准。
 
-核心实现：`internal/agent/engine.go`、`workspace.go`、`parser.go`、`server.go`、`model.go` 和 `stream.go`。设计理由见 [设计取舍说明](docs/设计取舍说明.md)。`/api/v1` 属于可选产品接口，默认没有配置身份验证时禁用，详细契约见 [产品接口](docs/产品接口-v1.md)。
+## 代码入口与后续扩展
 
-历史阶段记录仅用于追溯，本轮能力以本 README 与扩展交付记录为准。真实云端供应商、跨重启持久化及外部编辑器接入没有计入离线通过结论。
+| 位置 | 责任 |
+| --- | --- |
+| `main.go`、`product_config.go` | 配置、资源内嵌、启动与关闭 |
+| `internal/agent/engine.go`、`op_*.go`、`operations.go` | 工程校验、深拷贝、操作注册与原子计算 |
+| `workspace.go` | 版本绑定、计划确认、撤销与编辑记录 |
+| `parser.go`、`grammar.go`、`target_resolver.go` | 离线编排、句式与目标定位 |
+| `server.go`、`dialog.go`、`session.go` | 路由、对话编排、会话生命周期 |
+| `capability.go`、`feedback.go`、`observability.go` | 能力策略、错误码、请求日志 |
+| `model.go`、`stream.go`、`product*.go` | 可选模型、流式协议和产品接口 |
+| `web/*.js` | 状态、各面板与控件，原生 ES Module |
+
+新增操作先补回归，再新增 `op_*.go` 并显式注册；字段校验和模型说明由注册项派生。离线句式和新增交互按需求增加，不复制现有业务分支。新增可变字段时补深拷贝隔离测试。持久化、执行器与真实格式适配在具体需求出现后设计，不预建空接口。
+
+产品接口需身份配置，默认禁用；详见 [产品 API](docs/产品接口-v1.md)、[OpenAPI](docs/openapi.json) 与 [工程 Schema](docs/timeline.schema.json)。来源见 [THIRD_PARTY.md](THIRD_PARTY.md)，项目许可证由所有者决定。
+
+阶段计划、历史截图及临时生成物已清理；现状以本 README 为准，架构取舍在 ADR，验证结果在 `docs/verification/`，版本变化在 [CHANGELOG](CHANGELOG.md)。不提交密钥、会话、下载、缓存、node_modules 或旧二进制。

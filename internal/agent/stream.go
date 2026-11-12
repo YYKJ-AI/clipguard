@@ -35,6 +35,7 @@ func (w *messageStream) Header() http.Header    { return w.header }
 func (w *messageStream) WriteHeader(status int) { w.status = status }
 func (w *messageStream) Write(data []byte) (int, error) {
 	if w.status >= 400 {
+		w.destination.Header().Set("X-Error-Code", w.header.Get("X-Error-Code"))
 		var failure struct {
 			Error string `json:"error"`
 		}

@@ -3,8 +3,6 @@ package agent
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -47,13 +45,13 @@ type History struct {
 type pendingPlan struct {
 	binding Binding
 	preview Preview
-	after   Project
 }
 type historySnapshot struct {
 	project Project
 	summary string
 }
 type Workspace struct {
+	now     func() time.Time
 	mu      sync.Mutex
 	project *Project
 	epoch   uint64
@@ -66,7 +64,11 @@ type Workspace struct {
 }
 
 func NewWorkspace() *Workspace {
-	return &Workspace{plans: map[string]pendingPlan{}, undos: map[string]bool{}, redos: map[string]bool{}}
+	return newWorkspace(time.Now)
+}
+
+func newWorkspace(now func() time.Time) *Workspace {
+	return &Workspace{now: now, plans: map[string]pendingPlan{}, undos: map[string]bool{}, redos: map[string]bool{}}
 }
 func randomID() string {
 	var b [24]byte
@@ -105,40 +107,40 @@ func (w *Workspace) Snapshot() (Project, Binding, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.project == nil {
-		return Project{}, Binding{}, errors.New("请先导入工程")
+		return Project{}, Binding{}, userError("请先导入工程")
 	}
 	return Clone(*w.project), w.binding(), nil
 }
-func (w *Workspace) Preview(b Binding, ops []Operation, summaries ...string) (Preview, error) {
+func (w *Workspace) Preview(b Binding, ops []Operation, summary string) (Preview, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.project == nil || b != w.binding() {
-		return Preview{}, errors.New("工程已变化，请重新提交指令")
+		return Preview{}, userError("工程已变化，请重新提交指令")
 	}
 	if len(w.plans) >= 64 {
-		return Preview{}, errors.New("待确认计划已达上限，请先取消旧计划")
+		return Preview{}, userError("待确认计划已达上限，请先取消旧计划")
 	}
-	after, changes, err := Apply(*w.project, ops)
+	ops = cloneOperations(ops)
+	_, changes, err := Apply(*w.project, ops)
 	if err != nil {
 		return Preview{}, err
 	}
-	summary := fmt.Sprintf("修改 %d 个片段", len(changes))
-	if len(summaries) > 0 && summaries[0] != "" {
-		summary = summaries[0]
+	if summary == "" {
+		summary = fmt.Sprintf("修改 %d 个片段", len(changes))
 	}
 	preview := Preview{ID: randomID(), ProjectID: b.ProjectID, Revision: b.Revision, Operations: ops, Changes: changes, Summary: summary}
-	w.plans[preview.ID] = pendingPlan{b, preview, after}
+	w.plans[preview.ID] = pendingPlan{b, clonePreview(preview)}
 	return preview, nil
 }
 func (w *Workspace) record(action, summary string, before, after Project) {
-	w.records = append(w.records, HistoryEntry{ID: randomID(), Action: action, Summary: summary, Revision: after.Revision, Time: time.Now().UTC().Format(time.RFC3339), Changes: Diff(before, after)})
+	w.records = append(w.records, HistoryEntry{ID: randomID(), Action: action, Summary: summary, Revision: after.Revision, Time: w.now().UTC().Format(time.RFC3339), Changes: Diff(before, after)})
 }
 func (w *Workspace) checkCapacity() error {
 	if w.project.Revision == math.MaxInt64 {
-		return errors.New("版本号已达上限")
+		return userError("版本号已达上限")
 	}
 	if len(w.records) >= 1000 {
-		return errors.New("编辑记录已达 1000 条，请导出后重新导入")
+		return userError("编辑记录已达 1000 条，请导出后重新导入")
 	}
 	return nil
 }
@@ -147,19 +149,22 @@ func (w *Workspace) Confirm(id string) (Result, error) {
 	defer w.mu.Unlock()
 	plan, ok := w.plans[id]
 	if !ok {
-		return Result{}, errors.New("计划不存在、已处理或不属于当前会话")
+		return Result{}, userError("计划不存在、已处理或不属于当前会话")
 	}
 	if plan.binding != w.binding() {
-		return Result{}, errors.New("计划已过期，请重新生成预览")
+		return Result{}, userError("计划已过期，请重新生成预览")
 	}
 	if err := w.checkCapacity(); err != nil {
 		return Result{}, err
 	}
 	if len(w.history) >= 100 {
-		return Result{}, errors.New("撤销记录已达 100 条，请导出后重新导入以开始新历史")
+		return Result{}, userError("撤销记录已达 100 条，请导出后重新导入以开始新历史")
 	}
 	before := Clone(*w.project)
-	next := Clone(plan.after)
+	next, _, err := Apply(*w.project, plan.preview.Operations)
+	if err != nil {
+		return Result{}, err
+	}
 	next.Revision = before.Revision + 1
 	w.history = append(w.history, historySnapshot{before, plan.preview.Summary})
 	w.future = nil
@@ -172,7 +177,7 @@ func (w *Workspace) Cancel(id string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if _, ok := w.plans[id]; !ok {
-		return errors.New("计划不存在、已处理或不属于当前会话")
+		return userError("计划不存在、已处理或不属于当前会话")
 	}
 	delete(w.plans, id)
 	return nil
@@ -236,9 +241,50 @@ func (w *Workspace) History() History {
 		h.RedoSummary = w.future[len(w.future)-1].summary
 	}
 	if len(w.records) > 0 {
-		raw, _ := json.Marshal(w.records)
-		_ = json.Unmarshal(raw, &h.Entries)
+		h.Entries = append([]HistoryEntry(nil), w.records...)
+		for i := range h.Entries {
+			h.Entries[i].Changes = cloneChanges(w.records[i].Changes)
+		}
 	}
 	return h
 }
 func int64ptr(n int64) *int64 { return &n }
+
+func cloneOperations(ops []Operation) []Operation {
+	if ops == nil {
+		return nil
+	}
+	out := append([]Operation{}, ops...)
+	for i := range out {
+		o := &out[i]
+		o.SourceID = clonePtr(o.SourceID)
+		o.StartMS = clonePtr(o.StartMS)
+		o.DurationMS = clonePtr(o.DurationMS)
+		o.ShortenByMS = clonePtr(o.ShortenByMS)
+		o.TrackID = clonePtr(o.TrackID)
+		o.Text = clonePtr(o.Text)
+	}
+	return out
+}
+func cloneChanges(changes []Change) []Change {
+	if changes == nil {
+		return nil
+	}
+	out := append([]Change{}, changes...)
+	for i := range out {
+		if out[i].Before != nil {
+			v := cloneClip(*out[i].Before)
+			out[i].Before = &v
+		}
+		if out[i].After != nil {
+			v := cloneClip(*out[i].After)
+			out[i].After = &v
+		}
+	}
+	return out
+}
+func clonePreview(p Preview) Preview {
+	p.Operations = cloneOperations(p.Operations)
+	p.Changes = cloneChanges(p.Changes)
+	return p
+}
