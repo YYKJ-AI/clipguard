@@ -11,6 +11,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         go: ['1.22.x', stable]
+        # macos-latest 已是 macOS 15 / arm64 镜像，Go 1.22 的 darwin/arm64 运行时
+        # 在其上启动即 abort trap（测试二进制 4ms 退出，未执行任何用例）。
+        # 因此最低版本固定到 macOS 14 镜像验证，最新版仍在 macos-latest 验证。
+        exclude:
+          - os: macos-latest
+            go: '1.22.x'
+        include:
+          - os: macos-14
+            go: '1.22.x'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
