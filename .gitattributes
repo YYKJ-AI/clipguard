@@ -1,0 +1,17 @@
+# 仓库内文本一律存为 LF，避免 Windows 检出时转成 CRLF 导致 gofmt 检查失败。
+# GitHub Actions 的 Windows runner 默认 core.autocrlf=true，.gitattributes 优先级更高。
+* text=auto eol=lf
+
+# Windows 专用脚本保留 CRLF，双击与 PowerShell 的兼容性更稳。
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 明确按二进制处理，禁止任何换行符转换。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.exe binary

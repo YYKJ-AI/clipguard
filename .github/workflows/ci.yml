@@ -20,7 +20,13 @@ jobs:
           cache: false
       - name: Check Go formatting before installing development dependencies
         shell: bash
-        run: test -z "$(gofmt -l .)"
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "以下文件未按 gofmt 格式化（Windows 上通常是检出为 CRLF 导致）："
+            echo "$files"
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
