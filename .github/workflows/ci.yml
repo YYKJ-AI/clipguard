@@ -11,14 +11,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         go: ['1.22.x', stable]
-        # macos-latest 已是 macOS 15 / arm64 镜像，Go 1.22 的 darwin/arm64 运行时
-        # 在其上启动即 abort trap（测试二进制 4ms 退出，未执行任何用例）。
-        # 因此最低版本固定到 macOS 14 镜像验证，最新版仍在 macos-latest 验证。
+        # macOS 上 Go 1.22 的 darwin/arm64 运行时在 macOS 15 运行器镜像上启动即
+        # abort trap：测试二进制 4-6ms 退出、未执行任何用例，两个包报错完全一致，
+        # 属上游运行时与镜像的兼容问题。较旧的 macos-14 标签已停止支持
+        # （The configuration 'macos-14-arm64-us-default' is not supported），
+        # 因此最低版本改由 Linux 与 Windows 覆盖，macOS 只验证当前稳定版。
         exclude:
           - os: macos-latest
-            go: '1.22.x'
-        include:
-          - os: macos-14
             go: '1.22.x'
     runs-on: ${{ matrix.os }}
     steps:

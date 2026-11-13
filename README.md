@@ -170,7 +170,7 @@ go test -race -count=1 . ./internal/...
 
 竞态检查需要支持 cgo 的 C 编译工具，也在 Linux CI 执行。核心包覆盖率门槛为 85%，不把入口启动逻辑的覆盖率混入核心门槛。实测结果见验证记录。
 
-[CI](.github/workflows/ci.yml) 检查 Go 格式、测试、vet、构建以及页面测试、ESLint 和 Prettier；Linux 稳定版增加覆盖率、竞态和短时 fuzz。测试矩阵覆盖三个平台的 Go 1.22 与当前稳定版；其中 macOS 的 Go 1.22 固定使用 `macos-14` 镜像，因为 `macos-latest`（macOS 15 / arm64）上 Go 1.22 运行时启动即 `abort trap`，属上游运行时与镜像的兼容问题，与项目代码无关。测试失败时该步骤会把环境信息与错误摘要写入步骤摘要与检查注解，无需下载日志。[发布工作流](.github/workflows/release.yml) 生成独立二进制，不自动公开发布。云端状态以实际 Actions 为准。
+[CI](.github/workflows/ci.yml) 检查 Go 格式、测试、vet、构建以及页面测试、ESLint 和 Prettier；Linux 稳定版增加覆盖率、竞态和短时 fuzz。测试矩阵覆盖三个平台，Go 最低版本 1.22 由 Linux 与 Windows 验证，macOS 验证当前稳定版：`macos-latest`（macOS 15 / arm64）上 Go 1.22 的 darwin/arm64 运行时启动即 `abort trap`（测试二进制 4–6ms 退出、未执行任何用例），属上游运行时与镜像的兼容问题，与项目代码无关，较旧的 `macos-14` 标签也已停止支持。测试失败时该步骤会把环境信息与错误摘要写入步骤摘要与检查注解，无需下载日志。[发布工作流](.github/workflows/release.yml) 生成独立二进制，不自动公开发布。云端状态以实际 Actions 为准。
 
 ## 代码入口与后续扩展
 
