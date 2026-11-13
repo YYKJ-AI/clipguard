@@ -30,7 +30,40 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: go test -count=1 . ./internal/...
+      - name: Run tests
+        shell: bash
+        run: |
+          log=gotest.log
+          if go test -count=1 . ./internal/... 2>&1 | tee "$log"; then
+            exit 0
+          fi
+          # 失败时把环境与关键错误行同时写入步骤摘要和检查注解，
+          # 评审无需下载日志即可判断是环境问题还是用例问题。
+          {
+            echo "### go test 失败"
+            echo ""
+            echo "平台：${{ matrix.os }} / Go ${{ matrix.go }}"
+            echo ""
+            go version
+            uname -a
+            go env GOOS GOARCH CGO_ENABLED
+            echo ""
+            echo '```'
+            tail -40 "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          n=0
+          while IFS= read -r line; do
+            if [ -z "$line" ]; then
+              continue
+            fi
+            echo "::error::${line//\%/%25}"
+            n=$((n + 1))
+            if [ "$n" -ge 8 ]; then
+              break
+            fi
+          done < <(grep -E 'FAIL|panic|undefined|cannot|error|Error|no such file|killed|signal|_test\.go:' "$log" | head -8 || true)
+          exit 1
       - run: go vet . ./internal/...
       - run: go build . ./internal/...
       - run: npm ci
