@@ -136,25 +136,3 @@ func TestReferenceModelSeesVerifiedSelectionOnly(t *testing.T) {
 		t.Fatal("invalid selected ID reached provider")
 	}
 }
-
-func TestReferenceProductEndpointKeepsRecentCaptionConsistent(t *testing.T) {
-	s := NewServer(Config{ProductAuth: fixtureAuth{}})
-	createProduct(t, s, "alice")
-	id := productPlan(t, s, "alice", `把 s 的字幕改为“新”`)
-	confirmed := productCall(t, s, "alice", "POST", "/api/v1/projects/p/plans/"+id+"/confirm", "{}", "")
-	if confirmed.Code != 200 {
-		t.Fatal(confirmed.Body.String())
-	}
-	response := productCall(t, s, "alice", "POST", "/api/v1/projects/p/messages", `{"mode":"offline","text":"把刚刚那个字幕改为“再见”"}`, "")
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `"status":"plan"`) {
-		t.Fatalf("product conversation lost confirmed caption: %s", response.Body.String())
-	}
-	undone := productCall(t, s, "alice", "POST", "/api/v1/projects/p/undo", `{"request_id":"stage2-product-undo"}`, "")
-	if undone.Code != 200 {
-		t.Fatal(undone.Body.String())
-	}
-	response = productCall(t, s, "alice", "POST", "/api/v1/projects/p/messages", `{"mode":"offline","text":"把刚刚那个字幕改为“再见”"}`, "")
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `"status":"clarify"`) {
-		t.Fatalf("product undo kept stale caption: %s", response.Body.String())
-	}
-}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -22,8 +23,9 @@ type Config struct {
 	MaxSessions      int
 	Sample           []byte
 	ModelTimeout     time.Duration
-	ProductAuth      Authenticator
-	ProjectCodec     ProjectCodec
+	// AllowedHosts 为请求 Host 白名单。为空表示不校验（仅供进程内测试使用），
+	// 正式启动时 main 一定会填入回环地址，避免 DNS rebinding 把本地接口暴露出去。
+	AllowedHosts []string
 }
 type clarification struct {
 	ID       string
@@ -50,14 +52,25 @@ type userSession struct {
 func (u *userSession) captureRecentCaption(result Result) {
 	u.dialogMu.Lock()
 	defer u.dialogMu.Unlock()
+	captionID := ""
 	for _, change := range result.Changes {
 		if change.After != nil && change.After.Text != nil {
-			u.lastCaptionID = change.After.ID
-			_, u.lastCaptionBinding, _ = u.workspace.Snapshot()
+			captionID = change.After.ID
 		} else if change.ID == u.lastCaptionID && change.After == nil {
 			u.lastCaptionID = ""
 		}
 	}
+	if captionID == "" {
+		return
+	}
+	_, binding, err := u.workspace.Snapshot()
+	if err != nil {
+		// Without a snapshot the reference cannot be revalidated later, so drop
+		// it instead of pinning a zero binding.
+		u.lastCaptionID, u.lastCaptionBinding = "", Binding{}
+		return
+	}
+	u.lastCaptionID, u.lastCaptionBinding = captionID, binding
 }
 
 func (u *userSession) clearRecentCaption() {
@@ -67,15 +80,13 @@ func (u *userSession) clearRecentCaption() {
 }
 
 type Server struct {
-	creationWindows   map[string]creationWindow
-	config            Config
-	mu                sync.Mutex
-	sessions          map[string]*userSession
-	slots             chan struct{}
-	productProjects   map[projectKey]*userSession
-	productGeneration string
-	modelStatus       ModelStatus
-	modelCheckMu      sync.Mutex
+	creationWindows map[string]creationWindow
+	config          Config
+	mu              sync.Mutex
+	sessions        map[string]*userSession
+	slots           chan struct{}
+	modelStatus     ModelStatus
+	modelCheckMu    sync.Mutex
 }
 
 func NewServer(config Config) *Server {
@@ -97,7 +108,7 @@ func NewServer(config Config) *Server {
 	if config.ModelTimeout <= 0 {
 		config.ModelTimeout = 45 * time.Second
 	}
-	return &Server{creationWindows: map[string]creationWindow{}, config: config, sessions: map[string]*userSession{}, slots: make(chan struct{}, config.ModelConcurrency), productGeneration: randomID()}
+	return &Server{creationWindows: map[string]creationWindow{}, config: config, sessions: map[string]*userSession{}, slots: make(chan struct{}, config.ModelConcurrency)}
 }
 func respond(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -127,13 +138,31 @@ func body(r *http.Request, dest any) error {
 	}
 	return strictJSON(data, dest)
 }
-func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/api/v1/") {
-		s.productHTTP(w, r)
-		return
+
+// hostAllowed blocks DNS rebinding: comparing Origin with the Host header
+// proves nothing when the attacker owns the name that resolves to this server.
+// An empty configuration disables the check so in-process tests stay simple;
+// main always supplies the loopback hosts.
+func (s *Server) hostAllowed(hostport string) bool {
+	if len(s.config.AllowedHosts) == 0 {
+		return true
 	}
-	if s.config.ProductAuth != nil {
-		fail(w, 404, userError("产品服务模式仅开放 /api/v1 接口"))
+	host := hostport
+	if value, _, err := net.SplitHostPort(hostport); err == nil {
+		host = value
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	for _, allowed := range s.config.AllowedHosts {
+		if strings.EqualFold(strings.Trim(allowed, "[]"), host) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if !s.hostAllowed(r.Host) {
+		fail(w, 403, userError("请求的主机名不在允许列表内"))
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")

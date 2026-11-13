@@ -1,0 +1,30 @@
+{
+  "project_id": "aurora-coffee-promo",
+  "revision": 1,
+  "tracks": [
+    {"id": "video-main", "kind": "video", "locked": false},
+    {"id": "video-broll", "kind": "video", "locked": false},
+    {"id": "video-logo", "kind": "video", "locked": false},
+    {"id": "caption-title", "kind": "caption", "locked": false},
+    {"id": "caption-sub", "kind": "caption", "locked": false},
+    {"id": "caption-brand", "kind": "caption", "locked": true}
+  ],
+  "clips": [
+    {"id": "c-open", "display_name": "开场：门店外景", "track_id": "video-main", "start_ms": 0, "duration_ms": 4000, "source_in_ms": 0, "source_duration_ms": 12000},
+    {"id": "c-hook", "display_name": "主视觉：产品上桌", "track_id": "video-main", "start_ms": 4000, "duration_ms": 5000, "source_in_ms": 2000, "source_duration_ms": 15000},
+    {"id": "c-demo", "display_name": "功能演示：一键出杯", "track_id": "video-main", "start_ms": 9000, "duration_ms": 6000, "source_in_ms": 5000, "source_duration_ms": 20000},
+    {"id": "c-taste", "display_name": "口感特写", "track_id": "video-main", "start_ms": 15000, "duration_ms": 4000, "source_in_ms": 1000, "source_duration_ms": 9000},
+    {"id": "c-cta", "display_name": "结尾引导：到店", "track_id": "video-main", "start_ms": 19000, "duration_ms": 5000, "source_in_ms": 0, "source_duration_ms": 8000},
+    {"id": "b-bean", "display_name": "空镜：咖啡豆", "track_id": "video-broll", "start_ms": 0, "duration_ms": 3000, "source_in_ms": 0, "source_duration_ms": 6000},
+    {"id": "b-steam", "display_name": "空镜：热气升腾", "track_id": "video-broll", "start_ms": 9500, "duration_ms": 3000, "source_in_ms": 500, "source_duration_ms": 8000},
+    {"id": "b-cup", "display_name": "空镜：拉花特写", "track_id": "video-broll", "start_ms": 15500, "duration_ms": 2500, "source_in_ms": 0, "source_duration_ms": 5000},
+    {"id": "l-end", "display_name": "片尾 Logo", "track_id": "video-logo", "start_ms": 24000, "duration_ms": 3000, "source_in_ms": 0, "source_duration_ms": 4000},
+    {"id": "t-open", "display_name": "标题：清晨的第一杯", "track_id": "caption-title", "start_ms": 500, "duration_ms": 3000, "text": "清晨的第一杯"},
+    {"id": "t-mid", "display_name": "标题：三分钟出杯", "track_id": "caption-title", "start_ms": 9200, "duration_ms": 3000, "text": "三分钟，一杯现磨"},
+    {"id": "s-1", "display_name": "字幕：当日烘焙", "track_id": "caption-sub", "start_ms": 4000, "duration_ms": 3000, "text": "当日烘焙的阿拉比卡豆"},
+    {"id": "s-2", "display_name": "字幕：一键出杯", "track_id": "caption-sub", "start_ms": 9000, "duration_ms": 3000, "text": "一键出杯，不用等"},
+    {"id": "s-3", "display_name": "字幕：回甘明显", "track_id": "caption-sub", "start_ms": 15000, "duration_ms": 3000, "text": "入口醇厚，回甘明显"},
+    {"id": "s-4", "display_name": "字幕：到店活动", "track_id": "caption-sub", "start_ms": 19000, "duration_ms": 4000, "text": "到店出示本片，首杯半价"},
+    {"id": "brand-tag", "display_name": "品牌角标（锁定）", "track_id": "caption-brand", "start_ms": 0, "duration_ms": 27000, "text": "AURORA COFFEE · 城市里的第三空间"}
+  ]
+}

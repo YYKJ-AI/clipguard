@@ -13,7 +13,7 @@
 | `go test -coverprofile=output/core-coverage.out ./internal/agent` | 核心语句覆盖率 86.1% |
 | `npm test` | 原生模块加载与页面行为共 20 项通过 |
 | `npm run lint` / `npm run format:check` | ESLint、Prettier 通过，包含浏览器验收脚本 |
-| Edge + Playwright CLI，`tests/browser-acceptance.js` | 35 项离线端到端检查通过，页面无脚本异常 |
+| Edge + Playwright CLI，`tests/browser-acceptance.js` | 35 项离线端到端检查通过，页面无脚本异常（该脚本为一次性开发工具，交付前已移除以缩小审查面） |
 | `go test -run '^$' -fuzz '^FuzzOfflineParser$' -fuzztime=300s -parallel=2 ./internal/agent` | 301 秒，通过；716,216 次执行 |
 | `go test -race -count=1 . ./internal/...` | 本机未通过执行前提：cgo 未启用且缺少 C 编译工具；保留 Linux CI 检查，不能视为已通过 |
 

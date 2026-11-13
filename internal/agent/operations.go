@@ -48,8 +48,13 @@ func editableClip(p *Project, tracks map[string]Track, o Operation) (int, error)
 }
 func destinationTrack(tracks map[string]Track, id, kind string) (Track, error) {
 	target, ok := tracks[id]
-	if !ok || target.Kind != kind {
-		return Track{}, appError(CodeProject, "目标轨道不存在或类型不同")
+	// A missing track and a wrong-kind track are edit problems, not project
+	// format problems; they must not tell the user to inspect the project file.
+	if !ok {
+		return Track{}, errorf(CodeTrack, "目标轨道 %s 不存在", id)
+	}
+	if target.Kind != kind {
+		return Track{}, errorf(CodeTrack, "轨道 %s 是 %s 轨道，不能放置 %s 片段", id, target.Kind, kind)
 	}
 	if target.Locked {
 		return Track{}, appError(CodeLocked, "目标轨道已锁定")

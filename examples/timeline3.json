@@ -16,6 +16,6 @@
     {"id": "caption-a", "track_id": "caption-1", "start_ms": 0, "duration_ms": 3000, "text": "欢迎观看"},
     {"id": "caption-b", "track_id": "caption-1", "start_ms": 8000, "duration_ms": 2000, "text": "谢谢观看"},
     {"id": "caption-lock", "track_id": "caption-locked", "start_ms": 4000, "duration_ms": 2000, "text": "锁定字幕，请勿修改"},
-    {"id": "watermark-01", "track_id": "caption-watermark-lock", "start_ms": 0, "duration_ms": 10000, "text": "© 内部资料，严禁外传"}
+    {"id": "watermark-01", "track_id": "caption-watermark-lock", "start_ms": 0, "duration_ms": 10000, "text": "© 示例水印"}
   ]
 }

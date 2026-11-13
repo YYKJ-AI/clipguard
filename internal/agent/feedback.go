@@ -12,6 +12,7 @@ const (
 	CodeLocked   ErrorCode = "TRACK_LOCKED"
 	CodeOverlap  ErrorCode = "OVERLAP"
 	CodeTarget   ErrorCode = "TARGET_NOT_FOUND"
+	CodeTrack    ErrorCode = "TRACK_INVALID"
 	CodeTime     ErrorCode = "INVALID_TIME"
 	CodeProject  ErrorCode = "INVALID_PROJECT"
 	CodeModel    ErrorCode = "MODEL_FAILURE"
@@ -38,13 +39,16 @@ func errorf(code ErrorCode, format string, args ...any) error {
 }
 func userError(message string) error { return appError(CodeUser, message) }
 
+// Each entry states the cause only. The "本次未修改工程" tail is appended once
+// by instructionFeedback; do not repeat it here.
 var errorMessages = map[ErrorCode]string{
 	CodeJSON:     "文件或请求格式有误。请检查工程文件，或重新输入本次要求。",
-	CodeLocked:   "相关轨道已锁定，本次不能修改。请核对目标片段；本条指令未执行任何修改。",
-	CodeOverlap:  "修改会造成同一轨道的片段重叠，当前不会自动推移其他片段。请调整目标位置或修改量；本条指令未执行任何修改。",
+	CodeLocked:   "相关轨道已锁定，本次不能修改。",
+	CodeOverlap:  "修改会造成同一轨道的片段重叠，当前不会自动推移其他片段。请调整目标位置或修改量。",
 	CodeTarget:   "没有找到要修改的片段。请在当前时间轴选中片段，或使用唯一片段名称后重试。",
+	CodeTrack:    "目标轨道不存在，或与片段类型不符：视频片段只能放入视频轨道，字幕只能放入字幕轨道。请核对轨道后重试。",
 	CodeTime:     "修改的时间参数不完整或不符合当前操作。请明确目标时间或缩短量后重试。",
-	CodeProject:  "工程或修改内容的必填信息不完整或格式不正确。请检查工程文件后重试。",
+	CodeProject:  "工程格式不正确，请检查工程文件后重试。",
 	CodeModel:    "模型服务配置或返回内容不符合要求，请重试；仍失败时请联系程序维护者检查服务。",
 	CodeInput:    "修改内容不完整或不符合当前操作，请核对目标和参数后重试。",
 	CodeConflict: "工程或计划已变化，请重新读取工程并生成预览。",

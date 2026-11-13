@@ -11,7 +11,7 @@ func insertOperation() operationSpec {
 			var source *Clip
 			for _, c := range p.Clips {
 				if c.ID == o.TargetID {
-					return appError(CodeProject, "新片段 ID 已存在")
+					return appError(CodeInput, "新片段 ID 已存在")
 				}
 				if c.ID == *o.SourceID {
 					copy := cloneClip(c)

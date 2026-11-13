@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type contextParser struct {
@@ -26,8 +26,15 @@ func (p *contextParser) Parse(_ context.Context, _ Project, turns []Turn) (Parse
 	return ParseResult{Status: "clarify", Message: "请选择片段", Candidates: []Candidate{{ID: "a", Label: "片段 a"}, {ID: "b", Label: "片段 b"}}}, nil
 }
 
+// 会话回收按 lastSeen 的先后挑选最久未访问项。测试注入单调时钟：否则在
+// Windows 较粗的计时精度下，连续三次建会话可能拿到同一时间戳，"最久未访问"
+// 并列，淘汰结果随 map 遍历顺序变化，用例会偶发失败。
 func TestSessionLifecycleCapacity(t *testing.T) {
-	s := NewServer(Config{MaxSessions: 2})
+	tick := time.Unix(0, 0)
+	s := NewServer(Config{MaxSessions: 2, Now: func() time.Time {
+		tick = tick.Add(time.Second)
+		return tick
+	}})
 	first := session(t, s)
 	session(t, s)
 	session(t, s)
@@ -153,12 +160,4 @@ func TestCopiesDoNotAlias(t *testing.T) {
 			}
 		}
 	})
-}
-
-func TestFlushEmptyProductResponse(t *testing.T) {
-	rec := httptest.NewRecorder()
-	NewServer(Config{}).flushProduct(rec, newProductCapture())
-	if rec.Code != 200 {
-		t.Fatalf("status=%d", rec.Code)
-	}
 }

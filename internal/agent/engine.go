@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -94,12 +95,73 @@ type Change struct {
 }
 
 func strictJSON(data []byte, dest any) error {
+	if err := rejectDuplicateKeys(data); err != nil {
+		return err
+	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
 	if err := d.Decode(dest); err != nil {
 		return fmt.Errorf("JSON 格式或字段错误: %w", err)
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
+		return appError(CodeJSON, "只允许一个 JSON 值")
+	}
+	return nil
+}
+
+// Duplicate keys are legal JSON but ambiguous for a strict contract: two
+// readers can disagree on which value wins, so a typo can silently override a
+// field. Reject them at the boundary instead of picking the last one.
+func rejectDuplicateKeys(data []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var scan func() error
+	scan = func() error {
+		token, err := decoder.Token()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		switch token {
+		case json.Delim('{'):
+			seen := make(map[string]bool)
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return appError(CodeJSON, "对象字段名必须是字符串")
+				}
+				if seen[key] {
+					return errorf(CodeJSON, "字段 %s 重复出现，请只保留一处", key)
+				}
+				seen[key] = true
+				if err := scan(); err != nil {
+					return err
+				}
+			}
+			_, err := decoder.Token()
+			return err
+		case json.Delim('['):
+			for decoder.More() {
+				if err := scan(); err != nil {
+					return err
+				}
+			}
+			_, err := decoder.Token()
+			return err
+		default:
+			return nil
+		}
+	}
+	if err := scan(); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
 		return appError(CodeJSON, "只允许一个 JSON 值")
 	}
 	return nil
@@ -140,8 +202,15 @@ func cloneClip(c Clip) Clip {
 	return c
 }
 
-func validID(id string) bool { return strings.TrimSpace(id) != "" && len(id) <= 128 }
-func Validate(p Project) error {
+func validID(id string) bool   { return strings.TrimSpace(id) != "" && len(id) <= 128 }
+func Validate(p Project) error { return validateProject(p, true) }
+
+// validateStructure 只检查轨道、片段自身字段与引用完整性，不检查同轨重叠。
+// 批次内的中间态允许暂时重叠（交换两段顺序必须经过重叠的瞬间），
+// 整条指令提交前再由 Validate 统一检查重叠。
+func validateStructure(p Project) error { return validateProject(p, false) }
+
+func validateProject(p Project, checkOverlap bool) error {
 	if !validID(p.ID) || p.Revision < 1 {
 		return appError(CodeProject, "project_id 不能为空，revision 必须为正整数")
 	}
@@ -186,6 +255,9 @@ func Validate(p Project) error {
 		}
 		byTrack[c.TrackID] = append(byTrack[c.TrackID], c)
 	}
+	if !checkOverlap {
+		return nil
+	}
 	for id, clips := range byTrack {
 		sort.Slice(clips, func(i, j int) bool { return clips[i].StartMS < clips[j].StartMS })
 		for i := 1; i < len(clips); i++ {
@@ -209,7 +281,7 @@ func (o *Operation) UnmarshalJSON(data []byte) error {
 	}
 	for k, b := range fields {
 		if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
-			return errorf(CodeProject, "操作字段 %s 不允许 null", k)
+			return errorf(CodeInput, "操作字段 %s 不允许 null", k)
 		}
 	}
 	allowed := map[string]bool{"type": true, "target_id": true}
@@ -223,7 +295,7 @@ func (o *Operation) UnmarshalJSON(data []byte) error {
 
 	for k := range fields {
 		if !allowed[k] {
-			return errorf(CodeProject, "操作 %s 不允许字段 %s", v.Type, k)
+			return errorf(CodeInput, "操作 %s 不允许字段 %s", v.Type, k)
 		}
 	}
 	*o = Operation(v)
@@ -231,12 +303,19 @@ func (o *Operation) UnmarshalJSON(data []byte) error {
 }
 
 func Apply(p Project, ops []Operation) (Project, []Change, error) {
-	return applyOperations(p, ops, true)
+	return applyBatch(p, ops, true, true)
 }
 
 // Parsing uses the same validation for a prefix, which may have no net change.
 // A complete submitted plan must still contain an actual change.
 func applyOperations(p Project, ops []Operation, requireChange bool) (Project, []Change, error) {
+	return applyBatch(p, ops, requireChange, true)
+}
+
+// applyBatch runs operations in order on a working copy. Committed results must
+// pass the full validation; an intermediate prefix may temporarily overlap, so
+// parsing passes finalCheck=false while execution always checks.
+func applyBatch(p Project, ops []Operation, requireChange, finalCheck bool) (Project, []Change, error) {
 	if err := Validate(p); err != nil {
 		return Project{}, nil, err
 	}
@@ -256,8 +335,15 @@ func applyOperations(p Project, ops []Operation, requireChange bool) (Project, [
 		if err := spec.apply(&work, tracks, o); err != nil {
 			return Project{}, nil, fmt.Errorf("操作 %d: %w", n+1, err)
 		}
-		if err := Validate(work); err != nil {
+		// 中间态只校验片段自身约束；同轨重叠留到整条指令结束时统一检查，
+		// 否则交换、整体挪位这类需要经过临时重叠的指令永远无法表达。
+		if err := validateStructure(work); err != nil {
 			return Project{}, nil, fmt.Errorf("操作 %d: %w", n+1, err)
+		}
+	}
+	if finalCheck {
+		if err := Validate(work); err != nil {
+			return Project{}, nil, fmt.Errorf("整条指令校验失败: %w", err)
 		}
 	}
 

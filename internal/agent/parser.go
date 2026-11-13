@@ -140,7 +140,7 @@ func (parser OfflineParser) Parse(ctx context.Context, p Project, turns []Turn) 
 		work := p
 		if len(ops) > 0 {
 			var e error
-			work, _, e = applyOperations(p, ops, false)
+			work, _, e = applyBatch(p, ops, false, false)
 			if e != nil {
 				return ParseResult{}, e
 			}

@@ -196,30 +196,3 @@ func TestExtensionHistoryDetachedAndRedoOrder(t *testing.T) {
 		t.Fatal("history leaked mutable pointers")
 	}
 }
-
-func TestExtensionProductHistoryAndRedoStayOwnerScoped(t *testing.T) {
-	s := NewServer(Config{ProductAuth: fixtureAuth{}})
-	createProduct(t, s, "alice")
-	createProduct(t, s, "bob")
-	id := productPlan(t, s, "alice", "把 a 缩短 1 秒")
-	productCall(t, s, "alice", "POST", "/api/v1/projects/p/plans/"+id+"/confirm", "{}", "")
-	r := productCall(t, s, "alice", "GET", "/api/v1/projects/p/history", "", "")
-	if r.Code != 200 {
-		t.Fatalf("product history unavailable: %s", r.Body.String())
-	}
-	var h History
-	json.Unmarshal(r.Body.Bytes(), &h)
-	if len(h.Entries) != 1 {
-		t.Fatal("missing commit history")
-	}
-	r = productCall(t, s, "bob", "GET", "/api/v1/projects/p/history", "", "")
-	json.Unmarshal(r.Body.Bytes(), &h)
-	if len(h.Entries) != 0 {
-		t.Fatal("owner history leaked")
-	}
-	productCall(t, s, "alice", "POST", "/api/v1/projects/p/undo", `{"request_id":"undo"}`, "")
-	r = productCall(t, s, "alice", "POST", "/api/v1/projects/p/redo", `{"request_id":"redo"}`, "")
-	if r.Code != 200 {
-		t.Fatalf("product redo missing: %s", r.Body.String())
-	}
-}

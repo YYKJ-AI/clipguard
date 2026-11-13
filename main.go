@@ -60,6 +60,23 @@ func envInt(name string, defaultValue int) int {
 	}
 	return n
 }
+func envList(name string, defaults []string) []string {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return defaults
+	}
+	var values []string
+	for _, part := range strings.Split(raw, ",") {
+		if value := strings.TrimSpace(part); value != "" {
+			values = append(values, value)
+		}
+	}
+	if len(values) == 0 {
+		return defaults
+	}
+	return values
+}
+
 func main() {
 	listen := os.Getenv("LISTEN_ADDR")
 	if listen == "" {
@@ -67,15 +84,7 @@ func main() {
 	}
 	timeout := envInt("MODEL_TIMEOUT_SECONDS", 45)
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	config := agent.Config{Logger: logger, MaxSessions: envInt("MAX_SESSIONS", 128), ModelConcurrency: envInt("MODEL_CONCURRENCY", 4), ModelTimeout: time.Duration(timeout) * time.Second}
-	productAuth, authErr := loadProductAuth(os.Getenv("PRODUCT_AUTH_FILE"))
-	if authErr != nil {
-		log.Fatal(authErr)
-	}
-	config.ProductAuth = productAuth
-	if productAuth != nil {
-		log.Print("产品 v1 接口已启用身份校验")
-	}
+	config := agent.Config{Logger: logger, MaxSessions: envInt("MAX_SESSIONS", 128), ModelConcurrency: envInt("MODEL_CONCURRENCY", 4), ModelTimeout: time.Duration(timeout) * time.Second, AllowedHosts: envList("ALLOWED_HOSTS", []string{"127.0.0.1", "localhost", "::1"})}
 	base, model := os.Getenv("LLM_BASE_URL"), os.Getenv("LLM_MODEL")
 	if (base == "") != (model == "") {
 		log.Fatal("LLM_BASE_URL 与 LLM_MODEL 必须同时配置")

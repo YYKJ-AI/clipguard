@@ -49,7 +49,7 @@ GitHub 的发布包工作流可生成 Windows、macOS、Linux 的 amd64/arm64 �
 | 简单媒体预览 | 选择视频片段，使用内嵌演示封面或绑定本地视频/图片，按素材入点预览，字幕独立按时间轴叠加 |
 | 可选在线模型 | 兼容 Chat Completions JSON/SSE，支持咨询、澄清、候选计划和不支持反馈；仍由 Go 校验并等待确认 |
 
-不支持自动字幕、画面检测/修复、降噪、分镜生成、转场、音频轨道、音画字幕自动联动、波纹编辑、云存储、多人协作、视频编码导出或真实编辑器集成。产品接口的存在不代表已接入任何外部剪辑器。
+不支持自动字幕、画面检测/修复、降噪、分镜生成、转场、音频轨道、音画字幕自动联动、波纹编辑、云存储、多人协作、视频编码导出或真实编辑器集成。项目不接入任何外部剪辑器或业务系统。
 
 ## 五分钟演示
 
@@ -62,7 +62,7 @@ GitHub 的发布包工作流可生成 Windows、macOS、Linux 的 amd64/arm64 �
 7. 选择时间轴中的视频片段，点击“使用演示封面”或绑定本地视频/图片，拖动时间位置查看。未绑定媒体时仍能完成全部 JSON 编辑验收。
 8. 导出当前工程 JSON，再导入下载文件核对结果。
 
-实现与验证结果见 [测试与验收记录](docs/verification/2026-11-12-test-report.md)，架构约定见 [架构决策](docs/adr/0001-maintainable-core.md)。
+实现与验证结果见 [整改验证记录](docs/verification/2026-11-13-remediation.md)（最新）与 [2026-11-12 测试记录](docs/verification/2026-11-12-test-report.md)（历史），架构约定见 [架构决策](docs/adr/0001-maintainable-core.md)。
 
 ## 离线句式与目标引用
 
@@ -85,14 +85,15 @@ GitHub 的发布包工作流可生成 Windows、macOS、Linux 的 amd64/arm64 �
 
 ## 工程格式与确定性规则
 
-见 [样例](examples/timeline.json)、[旧格式样例](examples/timeline3.json) 和 [JSON Schema](docs/timeline.schema.json)。
+见 [主样例](examples/timeline.json)、[双锁轨样例](examples/timeline3.json)、[多轨样例](examples/aurora-coffee-promo.json)（6 轨 16 片段，用于验证导入不依赖预置 ID 与顺序）和 [JSON Schema](docs/timeline.schema.json)。
 
 顶层 `project_id`、正整数 `revision`、`tracks` 和 `clips`；轨道为唯一 `id`、`kind`（video/caption）、明确的布尔 `locked`。片段必填唯一 `id`、`track_id`、`start_ms`、正数 `duration_ms`；视频还需 `source_in_ms`、`source_duration_ms`，字幕需 `text`，不能混用。可选 `display_name` 最多 128 个 Unicode 码点；可省略或为空字符串，不接受 null。
 
 - 时间为整数毫秒，片段区间 `[start_ms, start_ms + duration_ms)`。同轨不重叠，端点相接允许，不同轨可重叠，碰撞拒绝且不自动推移。
+- 一条指令的多项操作按顺序在工作副本上执行：每步只校验片段自身约束（时间、时长、源区间、引用、锁轨），整批结束后再统一校验同轨重叠并提交。因此"交换两段顺序"这类必须经过临时重叠的指令可以表达，而最终提交态仍不允许重叠。
 - 时间轴起点表示显示位置，素材入点表示从源素材哪里开始取；视频必须满足 `source_in_ms + duration_ms <= source_duration_ms`。右端裁剪保持起点和素材入点不变。
 - 视频变化不自动移动、缩短或删除字幕；字幕操作必须明确出现在计划中。
-- 严格拒绝未知 JSON 字段、错误类型、未知 ID、null、非法源区间和时间溢出。`start_ms:0` 也须明确提供。非法导入不替换工程、不清空已有计划和历史。
+- 严格拒绝未知 JSON 字段、重复 JSON 字段、错误类型、未知 ID、null、非法源区间和时间溢出。`start_ms:0` 也须明确提供。非法导入不替换工程、不清空已有计划和历史。
 - 计划绑定工程 ID、版本和加载标识；确认时再检查，重新导入同一 ID、同一版本也会使旧计划失效。重复确认、取消后确认、处理期间变化均拒绝。
 - 每次提交、撤销或重做都让 revision 加一。恢复业务内容时不回退版本。取消、失败、预览和导出不推进版本。
 - 模型只生成数据，不能执行脚本、命令或自行确认。报告来自实际提交前后 Diff。
@@ -108,6 +109,7 @@ GitHub 的发布包工作流可生成 Windows、macOS、Linux 的 amd64/arm64 �
 - 媒体仅通过浏览器临时对象 URL 绑定，限 512 MiB 的本地视频或 PNG/JPEG/WebP/GIF，不上传到服务端。刷新或重新导入需重新绑定；不能随工程 JSON 带走本地文件。被复制插入的片段在本页面可继承来源绑定。
 - 简单预览展示当前所选视频片段，不做多视频轨合成或音频混音；字幕按独立时间范围显示。实际文件长度不足或编码不受浏览器支持会明确提示，JSON 编辑仍可用。
 - 同一连接来源每分钟最多新建 20 次匿名会话，已连接会话不消耗此额度；反向代理转发头不作为可信来源。
+- 修改类请求同时校验 `Origin` 与 `Host`：跨站 Origin 直接拒绝，Host 必须在白名单内（默认 `127.0.0.1`、`localhost`、`::1`，可用 `ALLOWED_HOSTS=host1,host2` 扩展）。这样即使域名被重新绑定到本机，请求也会因 Host 不在白名单而被拒。
 - 默认只监听 127.0.0.1。不同浏览器会话相互隔离，不承诺多人服务容量或生产部署。
 
 ## 在线模型：验收方自行配置，可选
@@ -174,17 +176,31 @@ go test -race -count=1 . ./internal/...
 
 | 位置 | 责任 |
 | --- | --- |
-| `main.go`、`product_config.go` | 配置、资源内嵌、启动与关闭 |
+| `main.go` | 配置、资源内嵌、启动与关闭 |
 | `internal/agent/engine.go`、`op_*.go`、`operations.go` | 工程校验、深拷贝、操作注册与原子计算 |
 | `workspace.go` | 版本绑定、计划确认、撤销与编辑记录 |
 | `parser.go`、`grammar.go`、`target_resolver.go` | 离线编排、句式与目标定位 |
 | `server.go`、`dialog.go`、`session.go` | 路由、对话编排、会话生命周期 |
 | `capability.go`、`feedback.go`、`observability.go` | 能力策略、错误码、请求日志 |
-| `model.go`、`stream.go`、`product*.go` | 可选模型、流式协议和产品接口 |
+| `model.go`、`stream.go` | 可选模型客户端与流式协议 |
 | `web/*.js` | 状态、各面板与控件，原生 ES Module |
 
 新增操作先补回归，再新增 `op_*.go` 并显式注册；字段校验和模型说明由注册项派生。离线句式和新增交互按需求增加，不复制现有业务分支。新增可变字段时补深拷贝隔离测试。持久化、执行器与真实格式适配在具体需求出现后设计，不预建空接口。
 
-产品接口需身份配置，默认禁用；详见 [产品 API](docs/产品接口-v1.md)、[OpenAPI](docs/openapi.json) 与 [工程 Schema](docs/timeline.schema.json)。来源见 [THIRD_PARTY.md](THIRD_PARTY.md)，项目许可证由所有者决定。
+产品化接口（多工程、身份、条件写入）不在本任务范围内，已从仓库移除，原因与代价见 [范围声明](SCOPES.md)。
+
+## 文档地图
+
+| 文档 | 内容 |
+| --- | --- |
+| [设计说明](docs/design.md) | 分层、数据模型、操作定义、校验粒度、版本与撤销、错误码 |
+| [设计取舍](docs/design-tradeoffs.md) | 为什么隔离解析与执行、如何避免误操作、没有实现什么（两页） |
+| [演示脚本](docs/demo.md) | 修改 / 澄清 / 失败 / 撤销四条路径的逐步操作与判定标准 |
+| [验收矩阵](docs/acceptance-matrix.md) | 每条必做场景对应的测试函数与命令 |
+| [范围声明](SCOPES.md) | 扩展项、文档外实现、明确不做、与文档的偏差 |
+| [架构决策](docs/adr/0001-maintainable-core.md) | 重构层面的历史取舍 |
+| [测试与验收记录](docs/verification/2026-11-13-remediation.md) | 本轮整改的实测证据（[整改前记录](docs/verification/2026-11-12-test-report.md)） |
+
+工程格式以 [JSON Schema](docs/timeline.schema.json) 为准，字段与解码器的一致性由 `TestSchemaMatchesDecoder` 守护。来源与复用见 [THIRD_PARTY.md](THIRD_PARTY.md)，项目许可证见 [LICENSE](LICENSE)（默认 MIT，如需内部专有请替换该文件）。
 
 阶段计划、历史截图及临时生成物已清理；现状以本 README 为准，架构取舍在 ADR，验证结果在 `docs/verification/`，版本变化在 [CHANGELOG](CHANGELOG.md)。不提交密钥、会话、下载、缓存、node_modules 或旧二进制。
